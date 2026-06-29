@@ -176,11 +176,11 @@ export function Whiteboard({ boardId, workspaceId, user }: WhiteboardProps) {
   /* ---------------------- SAVE ---------------------- */
 
   const handleChange = useCallback(
-    (elements: any[], appState: any) => {
+    (elements: readonly any[], appState: any) => {
       channelRef.current?.send({
         type: "broadcast",
         event: "elements",
-        payload: { elements },
+        payload: { elements: [...elements] },
       });
 
       if (saveTimeoutRef.current) {
@@ -197,7 +197,7 @@ export function Whiteboard({ boardId, workspaceId, user }: WhiteboardProps) {
         const { error } = await supabase
           .from("whiteboards")
           .update({
-            elements,
+            elements: [...elements],
             app_state: serializableAppState,
             updated_at: new Date().toISOString(),
           })
@@ -253,12 +253,11 @@ export function Whiteboard({ boardId, workspaceId, user }: WhiteboardProps) {
 
       {/* Canvas — min-h-0 lets it shrink inside the flex column so
           Excalidraw gets an actual measured height to fill. */}
-      <div className="relative min-h-0 flex-1">
+      <div className="relative min-h-0 flex-1" style={{ height: "100%", width: "100%" }}>
         <Excalidraw
           theme="dark"
           excalidrawAPI={setExcalidrawAPI}
           onChange={handleChange}
-          style={{ height: "100%", width: "100%" }}
         />
 
         {cursors.map((cursor) => (

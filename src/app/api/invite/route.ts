@@ -1,15 +1,23 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
 
 export async function POST(req: Request) {
   try {
     const { token } = await req.json();
     const supabase = await createClient();
+
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-    // Find invite
-    const { data: invite } = await supabase
+    // Use service role to look up invite — bypasses RLS so any
+    // authenticated user can redeem a token without being a member yet
+    const serviceClient = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    const { data: invite } = await serviceClient
       .from("workspace_invites")
       .select("*")
       .eq("token", token)
@@ -17,12 +25,18 @@ export async function POST(req: Request) {
       .single();
 
     if (!invite) return NextResponse.json({ error: "Invalid or expired invite" }, { status: 404 });
+
     if (new Date(invite.expires_at) < new Date()) {
       return NextResponse.json({ error: "Invite has expired" }, { status: 410 });
     }
 
-    // Add to workspace
-    const { error: memberError } = await supabase
+    // Optional: verify the invite email matches the logged-in user
+    if (invite.email && invite.email !== user.email) {
+      return NextResponse.json({ error: "This invite was sent to a different email" }, { status: 403 });
+    }
+
+    // Add to workspace (use service client to bypass RLS here too)
+    const { error: memberError } = await serviceClient
       .from("workspace_members")
       .insert({ workspace_id: invite.workspace_id, user_id: user.id, role: "member" });
 
@@ -31,7 +45,7 @@ export async function POST(req: Request) {
     }
 
     // Mark invite accepted
-    await supabase
+    await serviceClient
       .from("workspace_invites")
       .update({ status: "accepted" })
       .eq("id", invite.id);

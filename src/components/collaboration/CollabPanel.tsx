@@ -150,7 +150,6 @@ export function CollabPanel({ workspaceId, user, isOpen, onClose }: CollabPanelP
       .eq("workspace_id", workspaceId);
 
     if (data) {
-      // Fetch emails from profiles
       const ids = data.map(m => m.user_id);
       const { data: profiles } = await supabase
         .from("profiles")
@@ -191,8 +190,23 @@ export function CollabPanel({ workspaceId, user, isOpen, onClose }: CollabPanelP
         const isForCurrentView = activeGroup
           ? msg.group_id === activeGroup.id
           : msg.group_id === null;
+
         if (isForCurrentView) {
-          setMessages(prev => prev.find(m => m.id === msg.id) ? prev : [...prev, msg]);
+          setMessages(prev => {
+            // Replace matching optimistic message (same user + content, different id)
+            const optimisticIndex = prev.findIndex(
+              m => m.user_id === msg.user_id &&
+                   m.content === msg.content &&
+                   m.id !== msg.id
+            );
+            if (optimisticIndex !== -1) {
+              const updated = [...prev];
+              updated[optimisticIndex] = msg;
+              return updated;
+            }
+            // Append if not already present
+            return prev.find(m => m.id === msg.id) ? prev : [...prev, msg];
+          });
           setTimeout(scrollToBottom, 50);
         }
       })
@@ -219,25 +233,44 @@ export function CollabPanel({ workspaceId, user, isOpen, onClose }: CollabPanelP
     const content = input.trim();
     if (!content) return;
     setInput("");
-    await supabase.from("messages").insert({
+
+    // Optimistically add message immediately so UI feels instant
+    const optimisticMsg: Message = {
+      id: crypto.randomUUID(),
+      content,
+      user_id: user.id,
+      created_at: new Date().toISOString(),
+      group_id: activeGroup?.id || null,
+    };
+    setMessages(prev => [...prev, optimisticMsg]);
+    setTimeout(scrollToBottom, 50);
+
+    // Persist to DB — realtime will confirm and replace the optimistic message
+    const { error } = await supabase.from("messages").insert({
       workspace_id: workspaceId,
       user_id: user.id,
       content,
       group_id: activeGroup?.id || null,
     });
+
+    if (error) {
+      // Roll back optimistic message on failure
+      setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id));
+      toast.error("Failed to send message");
+    }
   }
 
   async function createInvite() {
     if (!inviteEmail.trim()) return;
     setInviteLoading(true);
     try {
-      // Create invite record
       const { data: invite, error } = await supabase
         .from("workspace_invites")
         .insert({
           workspace_id: workspaceId,
           invited_by: user.id,
           email: inviteEmail,
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         })
         .select("token")
         .single();
@@ -271,7 +304,12 @@ export function CollabPanel({ workspaceId, user, isOpen, onClose }: CollabPanelP
       created_by: user.id,
     });
     if (error) { toast.error("Failed to create group"); }
-    else { toast.success(`#${newGroupName} created!`); setNewGroupName(""); setNewGroupDesc(""); setShowNewGroup(false); }
+    else {
+      toast.success(`#${newGroupName} created!`);
+      setNewGroupName("");
+      setNewGroupDesc("");
+      setShowNewGroup(false);
+    }
     setGroupLoading(false);
   }
 
@@ -487,7 +525,6 @@ export function CollabPanel({ workspaceId, user, isOpen, onClose }: CollabPanelP
           )}
 
           <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-1">
-            {/* General always first */}
             <button
               onClick={() => { setActiveGroup(null); setTab("chat"); }}
               className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-obsidian-800/60 transition-colors text-left w-full group"
@@ -529,7 +566,6 @@ export function CollabPanel({ workspaceId, user, isOpen, onClose }: CollabPanelP
       {/* ─── MEMBERS TAB ─── */}
       {tab === "members" && (
         <div className="flex-1 overflow-y-auto flex flex-col">
-          {/* Invite section */}
           <div className="p-3 border-b border-obsidian-800 flex flex-col gap-2 shrink-0">
             <p className="text-xs font-medium text-obsidian-400 uppercase tracking-widest">Invite people</p>
             <div className="flex gap-2">
@@ -560,7 +596,6 @@ export function CollabPanel({ workspaceId, user, isOpen, onClose }: CollabPanelP
             )}
           </div>
 
-          {/* Online now */}
           {onlineUsers.length > 0 && (
             <div className="px-3 pt-3 pb-1 shrink-0">
               <p className="text-[10px] text-obsidian-600 uppercase tracking-widest mb-2 px-1">Online — {onlineUsers.length}</p>
@@ -572,7 +607,7 @@ export function CollabPanel({ workspaceId, user, isOpen, onClose }: CollabPanelP
                       <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 border border-obsidian-900" />
                     </div>
                     <span className="text-sm text-obsidian-200 truncate">
-                      {u.user_id === user.id ? <><span className="font-medium">You</span></> : u.email.split("@")[0]}
+                      {u.user_id === user.id ? <span className="font-medium">You</span> : u.email.split("@")[0]}
                     </span>
                     <span className="ml-auto text-[9px] text-emerald-500">online</span>
                   </div>
@@ -581,7 +616,6 @@ export function CollabPanel({ workspaceId, user, isOpen, onClose }: CollabPanelP
             </div>
           )}
 
-          {/* All members */}
           <div className="flex-1 overflow-y-auto px-3 pb-3">
             <p className="text-[10px] text-obsidian-600 uppercase tracking-widest mb-2 px-1 pt-3">
               All members — {members.length}
@@ -656,7 +690,7 @@ export function CollabPanel({ workspaceId, user, isOpen, onClose }: CollabPanelP
             <p className="text-xs font-medium text-obsidian-300 flex items-center gap-1.5">
               <Settings size={12} /> Current workspace
             </p>
-            <p className="text-sm text-obsidian-500 text-xs leading-relaxed">
+            <p className="text-xs text-obsidian-500 leading-relaxed">
               Manage your workspace settings, billing, and integrations in the Settings page.
             </p>
             <button
@@ -671,7 +705,7 @@ export function CollabPanel({ workspaceId, user, isOpen, onClose }: CollabPanelP
             <p className="text-xs font-medium text-obsidian-300 flex items-center gap-1.5">
               <Users size={12} /> Quick invite
             </p>
-            <p className="text-sm text-obsidian-500 text-xs leading-relaxed">
+            <p className="text-xs text-obsidian-500 leading-relaxed">
               Generate an invite link and share it with your team.
             </p>
             <button

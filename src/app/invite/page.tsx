@@ -1,11 +1,11 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Logo } from "@/components/ui/Logo";
 import { toast } from "sonner";
 import { Loader, CheckCircle, XCircle } from "lucide-react";
 
-export default function InvitePage() {
+function InviteContent() {
   const router = useRouter();
   const params = useSearchParams();
   const token = params.get("token");
@@ -13,7 +13,11 @@ export default function InvitePage() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    if (!token) { setStatus("error"); setMessage("Invalid invite link."); return; }
+    if (!token) {
+      setStatus("error");
+      setMessage("Invalid invite link.");
+      return;
+    }
 
     async function acceptInvite() {
       const res = await fetch("/api/invite", {
@@ -32,8 +36,9 @@ export default function InvitePage() {
         setMessage(data.error || "Something went wrong.");
       }
     }
+
     acceptInvite();
-  }, [token]);
+  }, [token, router]);
 
   return (
     <div className="min-h-screen bg-obsidian-950 flex items-center justify-center px-5">
@@ -68,5 +73,19 @@ export default function InvitePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function InvitePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-obsidian-950 flex items-center justify-center">
+          <Loader size={24} className="animate-spin text-indigo-400" />
+        </div>
+      }
+    >
+      <InviteContent />
+    </Suspense>
   );
 }

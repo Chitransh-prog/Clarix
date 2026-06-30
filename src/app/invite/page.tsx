@@ -1,6 +1,7 @@
 "use client";
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/ui/Logo";
 import { toast } from "sonner";
 import { Loader, CheckCircle, XCircle } from "lucide-react";
@@ -20,25 +21,32 @@ function InviteContent() {
     }
 
     async function acceptInvite() {
+      // Check auth first — if not logged in redirect to login with token preserved
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.push(`/auth/login?redirect=/invite?token=${token}`);
+        return;
+      }
+
       const res = await fetch("/api/invite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token }),
       });
 
-      // Not logged in — redirect to signup preserving the token
-      if (res.status === 401) {
-        router.push(`/auth/signup?redirect=/invite?token=${token}`);
-        return;
-      }
-
       const data = await res.json();
+      console.log("Invite API response:", res.status, data);
 
       if (res.ok) {
         setStatus("success");
         setMessage("You've joined the workspace!");
         toast.success("Welcome to the workspace!");
         setTimeout(() => router.push("/dashboard/whiteboard"), 2000);
+      } else if (res.status === 401) {
+        // Should not reach here due to client check above, but handle anyway
+        router.push(`/auth/login?redirect=/invite?token=${token}`);
       } else {
         setStatus("error");
         setMessage(data.error || "Something went wrong.");
@@ -70,7 +78,7 @@ function InviteContent() {
             <>
               <XCircle size={32} className="text-red-400" />
               <p className="text-sm text-obsidian-100 font-medium">{message}</p>
-              <div className="flex gap-2 mt-2">
+              <div className="flex gap-2 mt-2 w-full">
                 <button
                   onClick={() => router.push(`/auth/login?redirect=/invite?token=${token}`)}
                   className="flex-1 px-4 py-2 rounded-xl text-sm bg-obsidian-800 hover:bg-obsidian-700 text-white transition-colors"

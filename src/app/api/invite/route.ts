@@ -5,53 +5,63 @@ import { createClient as createServiceClient } from "@supabase/supabase-js";
 export async function POST(req: Request) {
   try {
     const { token } = await req.json();
+
+    if (!token) {
+      return NextResponse.json({ error: "Token is required" }, { status: 400 });
+    }
+
     const supabase = await createClient();
-
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-    // Use service role to look up invite — bypasses RLS so any
-    // authenticated user can redeem a token without being a member yet
+    if (!user) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
     const serviceClient = createServiceClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    const { data: invite } = await serviceClient
+    const { data: invite, error: inviteError } = await serviceClient
       .from("workspace_invites")
       .select("*")
       .eq("token", token)
       .eq("status", "pending")
       .single();
 
-    if (!invite) return NextResponse.json({ error: "Invalid or expired invite" }, { status: 404 });
+    if (inviteError || !invite) {
+      console.error("Invite lookup error:", inviteError);
+      return NextResponse.json({ error: "Invalid or expired invite" }, { status: 404 });
+    }
 
-    if (new Date(invite.expires_at) < new Date()) {
+    if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
       return NextResponse.json({ error: "Invite has expired" }, { status: 410 });
     }
 
-    // Optional: verify the invite email matches the logged-in user
     if (invite.email && invite.email !== user.email) {
-      return NextResponse.json({ error: "This invite was sent to a different email" }, { status: 403 });
+      return NextResponse.json(
+        { error: `This invite was sent to ${invite.email}` },
+        { status: 403 }
+      );
     }
 
-    // Add to workspace (use service client to bypass RLS here too)
     const { error: memberError } = await serviceClient
       .from("workspace_members")
       .insert({ workspace_id: invite.workspace_id, user_id: user.id, role: "member" });
 
     if (memberError && memberError.code !== "23505") {
+      console.error("Member insert error:", memberError);
       return NextResponse.json({ error: "Failed to join workspace" }, { status: 500 });
     }
 
-    // Mark invite accepted
     await serviceClient
       .from("workspace_invites")
       .update({ status: "accepted" })
       .eq("id", invite.id);
 
     return NextResponse.json({ workspace_id: invite.workspace_id });
-  } catch {
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  } catch (err: any) {
+    console.error("Invite route error:", err);
+    return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
   }
 }

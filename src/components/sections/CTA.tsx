@@ -20,9 +20,6 @@ export function CTA() {
               <Button size="lg">
                 <Link href="/auth/signup" className="flex items-center gap-2">Start for free <ArrowRight size={16} /></Link>
               </Button>
-              <Button size="lg" variant="secondary">
-                <Link href="#features">See features</Link>
-              </Button>
             </div>
           </div>
         </div>

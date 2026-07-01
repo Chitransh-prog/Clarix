@@ -15,7 +15,6 @@ import type { User } from "@supabase/supabase-js";
 const navItems = [
   { label: "Overview", href: "/dashboard", icon: LayoutDashboard },
   { label: "Projects", href: "/dashboard/projects", icon: FolderOpen },
-  { label: "Tasks", href: "/dashboard/tasks", icon: CheckSquare },
   { label: "Whiteboard", href: "/dashboard/whiteboard", icon: PenTool },
   { label: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
 ];

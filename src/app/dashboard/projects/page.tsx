@@ -1,5 +1,8 @@
 "use client";
 import { useState } from "react";
+import { DocGenerator } from "@/components/docs/DocGenerator";
+import { Zap } from "lucide-react";
+
 import {
   FolderOpen, Plus, X, ChevronDown, ChevronUp,
   Calendar, Users, Code2, FileText, CheckCircle2,
@@ -167,8 +170,10 @@ function ProjectCard({
   onEdit: (p: Project) => void;
   onDelete: (id: string) => void;
   onStatusChange: (id: string, s: ProjectStatus) => void;
+  
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [showDocGen, setShowDocGen] = useState(false);
   const docsDone = Object.entries(project.documents)
     .filter(([k]) => ["invoice","acknowledgement","welcomeDoc","contract"].includes(k))
     .filter(([, v]) => v === "signed" || v === "sent").length;
@@ -193,6 +198,11 @@ function ProjectCard({
             <p className="text-xs text-obsidian-500 truncate">{project.client.company} — {project.client.name}</p>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            <button onClick={() => setShowDocGen(true)} 
+              className="p-1.5 rounded-lg text-obsidian-500 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
+              title="Generate document with AI">
+              <Zap size={14} />
+            </button>
             <button onClick={() => onEdit(project)} className="p-1.5 rounded-lg text-obsidian-500 hover:text-obsidian-100 hover:bg-obsidian-800 transition-colors">
               <FileText size={14} />
             </button>
@@ -941,3 +951,4 @@ export default function ProjectsPage() {
     </div>
   );
 }
+

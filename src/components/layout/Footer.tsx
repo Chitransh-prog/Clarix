@@ -44,7 +44,6 @@ export function Footer() {
         </div>
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 pt-8 border-t border-obsidian-800/60">
           <p className="text-xs text-obsidian-600">© {new Date().getFullYear()} Clarix. All rights reserved.</p>
-          <p className="text-xs text-obsidian-600">Built with Next.js, Tailwind CSS & Supabase</p>
         </div>
       </div>
     </footer>

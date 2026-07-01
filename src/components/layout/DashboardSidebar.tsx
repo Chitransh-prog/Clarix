@@ -61,12 +61,6 @@ export function DashboardSidebar({ user }: { user: User }) {
             </Link>
           );
         })}
-
-        <div className="mt-4 pt-4 border-t border-obsidian-800/60">
-          <button className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-obsidian-500 hover:text-obsidian-100 hover:bg-obsidian-800/60 transition-all">
-            <Plus size={15} />New task
-          </button>
-        </div>
       </nav>
 
       <div className="p-3 border-t border-obsidian-800/60 flex flex-col gap-1">
